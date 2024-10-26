@@ -26,29 +26,27 @@ export class User extends Document {
     @Prop({ default: Access_Level.USER })
     access_level: Access_Level;
 
+    // Use bcrypt to compare hashed password
     async validatePassword(password: string): Promise<boolean> {
-        if (!this.password) return false;
-        return await bcrypt.compare(password, this.password);
+        return bcrypt.compare(password, this.password);
     }
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Add instance methods
 UserSchema.methods.validatePassword = async function (
     password: string,
 ): Promise<boolean> {
-    if (!this.password) return false;
-    return await bcrypt.compare(password, this.password);
+    return bcrypt.compare(password, this.password);
 };
 
-// HASHINGG
+// HASHING the password before saving
 UserSchema.pre('save', async function (next) {
-    try {
-        if (!this.isModified('password') || !this.password) {
-            return next();
-        }
+    if (!this.isModified('password')) {
+        return next();
+    }
 
+    try {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
         next();

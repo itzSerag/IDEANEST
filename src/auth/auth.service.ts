@@ -22,7 +22,8 @@ export class AuthService {
     async __validateUser(loginUserDto: LoginUserDto): Promise<any> {
         const user = await this.userService.findOneByEmail(loginUserDto.email);
 
-        log(user);
+        // log(user);
+        // log('here;' + (await user.validatePassword(loginUserDto.password)));
         if (!user || !(await user.validatePassword(loginUserDto.password))) {
             return null;
         }
@@ -35,18 +36,20 @@ export class AuthService {
         );
         if (existUser) {
             throw new ForbiddenException(
-                'User already Signup with this credentials',
+                'User already signed up with these credentials',
             );
         }
 
         try {
             const user = await this.userService.create({ ...createUserDto });
-            user.save();
+            await user.save(); // Ensure the save is awaited
+            return 'success';
         } catch (error) {
             log(error);
-            return "error: can't create the user please try again";
+            throw new ForbiddenException(
+                'User could not be created, please try again.',
+            );
         }
-        return 'success';
     }
 
     async login(loginUserDto: LoginUserDto) {
@@ -54,7 +57,7 @@ export class AuthService {
 
         if (!user) {
             throw new UnauthorizedException(
-                'Cant find a user with these credentials',
+                'Cannot find user with these credentials',
             );
         }
 
@@ -63,15 +66,7 @@ export class AuthService {
             userId: user._id.toString(), // Convert ObjectId to string
         };
 
-        // Issue new access and refresh tokens -- INLINE -- i know thats not the best for prod but its only 2 days
-        return {
-            access_token: this.jwtService.sign(payload, {
-                expiresIn: process.env.JWT_EXPIRATION,
-            }),
-            refresh_token: this.jwtService.sign(payload, {
-                expiresIn: process.env.JWT_REFRESH_EXPIRATION,
-            }),
-        };
+        return this.signToken(payload);
     }
 
     async refresh(refreshToken: string) {
@@ -89,15 +84,7 @@ export class AuthService {
                 userId: decoded._id,
             };
 
-            // Issue new access and refresh tokens
-            return {
-                access_token: this.jwtService.sign(payload, {
-                    expiresIn: process.env.JWT_EXPIRATION,
-                }),
-                refresh_token: this.jwtService.sign(payload, {
-                    expiresIn: process.env.JWT_REFRESH_EXPIRATION,
-                }),
-            };
+            return this.signToken(payload);
         } catch (error) {
             log(error);
             throw new UnauthorizedException('Invalid refresh token');
@@ -105,8 +92,29 @@ export class AuthService {
     }
 
     async revokeToken(refreshToken: string) {
-        const decoded = this.jwtService.decode(refreshToken) as any;
-        const expiration = decoded.exp - Math.floor(Date.now() / 1000); // Calculate remaining expiration time
-        await this.redisService.addTokenToBlacklist(refreshToken, expiration);
+        try {
+            const decoded = this.jwtService.verify(refreshToken); // Ensure token is valid
+            const expiration = decoded.exp - Math.floor(Date.now() / 1000); // Calculate remaining expiration time
+            await this.redisService.addTokenToBlacklist(
+                refreshToken,
+                expiration,
+            );
+        } catch (error) {
+            log(error);
+            throw new UnauthorizedException(
+                'Invalid refresh token, cannot revoke',
+            );
+        }
+    }
+
+    private async signToken(payload: JWTPayload) {
+        return {
+            access_token: this.jwtService.sign(payload, {
+                expiresIn: process.env.JWT_EXPIRATION,
+            }),
+            refresh_token: this.jwtService.sign(payload, {
+                expiresIn: process.env.JWT_REFRESH_EXPIRATION,
+            }),
+        };
     }
 }
