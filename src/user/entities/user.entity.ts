@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
+import { Access_Level } from '../enums';
 
 @Schema({
     timestamps: true,
@@ -16,13 +17,14 @@ export class User extends Document {
     @Prop({ required: true, trim: true })
     name: string;
 
-    // Password for local login
-    @Prop({
-        required: true,
-        minlength: 6,
-        maxlength: 20,
-    })
+    @Prop({ required: true, index: true })
+    email: string;
+
+    @Prop({ required: true })
     password: string;
+
+    @Prop({ default: Access_Level.USER })
+    access_level: Access_Level;
 
     async validatePassword(password: string): Promise<boolean> {
         if (!this.password) return false;

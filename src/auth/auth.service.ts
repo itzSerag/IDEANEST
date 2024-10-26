@@ -1,10 +1,15 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+    ForbiddenException,
+    Injectable,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { RedisService } from '../redis/redis.service';
 import { log } from 'console';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
+import { JWTPayload } from './interface/jwt-interface.interface';
 
 @Injectable()
 export class AuthService {
@@ -14,21 +19,49 @@ export class AuthService {
         private redisService: RedisService,
     ) {}
 
-    async validateUser(loginUserDto: LoginUserDto): Promise<any> {
+    async __validateUser(loginUserDto: LoginUserDto): Promise<any> {
         const user = await this.userService.findOneByEmail(loginUserDto.email);
-        if (user && (await user.validatePassword(loginUserDto.password))) {
-            return user;
-        }
-        throw new UnauthorizedException('Invalid credentials');
-    }
 
-    async register(createUserDto: CreateUserDto) {
-        const user = await this.userService.create({ ...createUserDto });
+        log(user);
+        if (!user || !(await user.validatePassword(loginUserDto.password))) {
+            return null;
+        }
         return user;
     }
 
-    async login(user: any) {
-        const payload = { email: user.email, sub: user._id };
+    async register(createUserDto: CreateUserDto): Promise<string> {
+        const existUser = await this.userService.findOneByEmail(
+            createUserDto.email,
+        );
+        if (existUser) {
+            throw new ForbiddenException(
+                'User already Signup with this credentials',
+            );
+        }
+
+        try {
+            const user = await this.userService.create({ ...createUserDto });
+            user.save();
+        } catch (error) {
+            log(error);
+            return "error: can't create the user please try again";
+        }
+        return 'success';
+    }
+
+    async login(loginUserDto: LoginUserDto) {
+        const user = await this.__validateUser(loginUserDto);
+
+        if (!user) {
+            throw new UnauthorizedException(
+                'Cant find a user with these credentials',
+            );
+        }
+
+        const payload: JWTPayload = {
+            email: user.email,
+            userId: user._id.toString(), // Convert ObjectId to string
+        };
 
         // Issue new access and refresh tokens -- INLINE -- i know thats not the best for prod but its only 2 days
         return {
@@ -50,7 +83,11 @@ export class AuthService {
 
         try {
             const decoded = this.jwtService.verify(refreshToken);
-            const payload = { email: decoded.email, sub: decoded.sub };
+
+            const payload: JWTPayload = {
+                email: decoded.email,
+                userId: decoded._id,
+            };
 
             // Issue new access and refresh tokens
             return {

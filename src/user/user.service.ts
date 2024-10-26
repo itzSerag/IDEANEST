@@ -23,9 +23,8 @@ export class UserService {
         return user;
     }
 
-    async findOneByEmail(email: string): Promise<User> {
-        const user = this.userModel.findOne({ email });
-        return user;
+    async findOneByEmail(email: string): Promise<User | null> {
+        return await this.userModel.findOne({ email });
     }
 
     remove(id: number) {
