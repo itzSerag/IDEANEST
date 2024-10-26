@@ -22,6 +22,10 @@ export class OrganizationController {
         @Param('id') orgId,
         @Body() userInvitationDTO: UserInvitationDTO,
     ) {
-        return await this.organizationService.invite(userInvitationDTO, orgId);
+        const res = await this.organizationService.invite(
+            userInvitationDTO,
+            orgId,
+        );
+        return { message: res };
     }
 }

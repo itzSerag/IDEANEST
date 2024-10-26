@@ -36,40 +36,43 @@ export class OrganizationService {
     }
 
     async invite(userInvitationDTO: UserInvitationDTO, organizationId: string) {
-        // add this user to the organization
-
+        // Add this user to the organization
         try {
             const organization =
                 await this.organizationModel.findById(organizationId);
+
+            // Check if the organization exists
             if (!organization) {
                 throw new NotFoundException('Organization not found');
             }
 
+            // Find the user by email
             const user = await this.userService.findOneByEmail(
                 userInvitationDTO.email,
             );
-
             if (!user) {
                 throw new NotFoundException('User with this email not found');
             }
 
-            organization.organization_members.map((user) => {
-                if (user.email === userInvitationDTO.email) {
-                    throw new NotFoundException(
-                        'User already in the organization',
-                    );
-                }
-            });
+            // Check if the user is already a member
+            const isMember = organization.organization_members.some(
+                (member) => member.email === userInvitationDTO.email,
+            );
+            if (isMember) {
+                throw new NotFoundException('User already in the organization');
+            }
 
+            // Add the user to the organization members
             organization.organization_members.push(user);
 
-            organization.save();
+            // Save the organization and handle any potential errors
+            await organization.save();
 
-            return 'success : User invited Successfully';
+            return 'Success: User invited successfully';
         } catch (error) {
             log(error);
             throw new InternalServerErrorException(
-                'Something wrong happend, please try again',
+                'Something went wrong, please try again',
             );
         }
     }
